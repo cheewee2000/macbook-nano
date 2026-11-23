@@ -1,15 +1,26 @@
 import XCTest
 
-/// End to end against test/fake_mac.py (start it first; test/run.sh does). The fake Mac logs what arrives,
-/// run.sh checks the log: the keys typed here and a pointer that moved and clicked.
+/// End to end against test/fake_mac.py (start it first; test/run.sh does). The fake Mac asks for a login the
+/// way a real one does and logs what arrives; run.sh checks the log: the login, the keys typed here, and a
+/// pointer that moved and clicked.
 final class TypeAndPointTests: XCTestCase {
     func testTypeAndPoint() {
         let app = XCUIApplication()
-        app.launchArguments = ["-host", "127.0.0.1:5999", "-user", "", "-zoom", "1"]
+        // A user name nobody has saved a password for: the launch connect is refused (as with a wrong password
+        // on a real Mac), then the password is typed in and CONNECT pressed.
+        app.launchArguments = ["-host", "127.0.0.1:5999", "-user", "tester\(Int.random(in: 0..<1_000_000))", "-zoom", "1"]
         app.launch()
 
+        XCTAssert(app.staticTexts["ERROR"].waitForExistence(timeout: 20), "the refused login never showed an error")
+        let password = app.secureTextFields["password"]
+        password.tap()
+        password.typeText("c0rrect horse!")
+        app.buttons["CONNECT"].tap()
+
         let a = app.buttons["key-a"]
-        XCTAssert(a.waitForExistence(timeout: 20), "never connected to the fake Mac")
+        XCTAssert(a.waitForExistence(timeout: 20), "never got in to the fake Mac")
+        // the sign-in screen and the iOS keyboard are still animating away for a moment: taps before that go nowhere
+        wait(for: [expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: a)], timeout: 10)
         a.tap()                                    // a
         app.buttons["key-shift"].tap()             // latched shift
         app.buttons["key-1"].tap()                 // !

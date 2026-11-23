@@ -74,6 +74,7 @@ struct Laptop: View {
             .frame(width: w, height: h)
             .ignoresSafeArea()
         }
+        .ignoresSafeArea(.keyboard)              // the iOS keyboard sliding away after sign-in must not squeeze the laptop
         .defersSystemGestures(on: .bottom)       // trackpad strokes near the bottom edge are not "go home"
         .persistentSystemOverlays(.hidden)
     }
@@ -160,15 +161,23 @@ struct Connect: View {
     @State private var password = ""
 
     var body: some View {
+        // A ScrollView, so the keyboard coming up scrolls the form instead of squeezing the text into one line.
+        ScrollView {
         VStack(alignment: .leading, spacing: 16) {
             Text("MACBOOK NANO").font(mono(24))
             Text("Your Mac, in your pocket. On the Mac, turn on System Settings → General → Sharing → Screen Sharing, then sign in here with your Mac login. Host is its name or address, like mac-mini.local.")
                 .font(mono(13)).lineSpacing(6)
             field("HOST", TextField("", text: $host).keyboardType(.URL).accessibilityIdentifier("host"))
             field("USER", TextField("", text: $user).accessibilityIdentifier("user"))
-            field("PASSWORD", SecureField("", text: $password).accessibilityIdentifier("password"))
+            // .oneTimeCode: the one content type that stops iOS offering "Save Password?", which lands on top of
+            // the Mac keyboard the moment the session opens. The password is already in this app's Keychain.
+            field("PASSWORD", SecureField("", text: $password).textContentType(.oneTimeCode).accessibilityIdentifier("password"))
             Button {
+                // a suggestion tapped on the keyboard leaves a trailing space, which the Mac takes as part of the name
+                host = host.trimmingCharacters(in: .whitespaces); user = user.trimmingCharacters(in: .whitespaces)
                 Keychain.set(password, account: "\(user)@\(host)")
+                // put the iOS keyboard away now: left up, it is still sliding off the Mac keyboard when the session opens
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 mac.connect(host: host, user: user, password: password)
             } label: {
                 Text(mac.status == .connecting ? "CONNECTING" : "CONNECT").font(mono(12)).tracking(0.5)
@@ -179,19 +188,20 @@ struct Connect: View {
                 Text("ERROR").font(mono(12)).foregroundStyle(Color(red: 0.843, green: 0.173, blue: 0.051))
                 Text(why).font(mono(13)).lineSpacing(6)
             }
-            Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 4) {
                 Text(idLabel).tracking(0.84)
                 Text(idLabelExpansion)
                 Text("V" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""))
             }
-            .font(mono(12))
+            .font(mono(12)).padding(.top, 24)
         }
         .foregroundStyle(.black)
         .textInputAutocapitalization(.never).autocorrectionDisabled()
         .padding(24)
-        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: 560, alignment: .topLeading)
         .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
         .onAppear { password = Keychain.get(account: "\(user)@\(host)") ?? "" }
     }
 

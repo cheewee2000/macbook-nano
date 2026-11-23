@@ -10,8 +10,8 @@ packages:
     revision: 090b96eddeee183e9fec293c5cd881d302a4349d
 settings:
   base:
-    MARKETING_VERSION: 0.1.0
-    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.2
+    CURRENT_PROJECT_VERSION: 3
     SWIFT_VERSION: 5.0
 targets:
   MacbookNano:
@@ -25,6 +25,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: RoyalVNCKit
+        embed: true          # a dynamic framework: without this it only loads on the simulator, off this Mac's build folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cwandt.macbooknano
@@ -40,6 +41,9 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Release:
+          ENABLE_TESTABILITY: YES     # the tests run against Release (see schemes below)
   MacbookNanoTests:
     type: bundle.unit-test
     platform: iOS
@@ -65,5 +69,11 @@ schemes:
     build:
       targets:
         MacbookNano: all
+    # Release everywhere, on purpose. A Mac's login is a 4096-bit Diffie-Hellman exchange, which RoyalVNCKit does
+    # in pure Swift: about 3 s optimized, minutes in a Debug build, and the Mac hangs up long before that
+    # ("Security handshaking failed", v0.1.1).
+    run:
+      config: Release
     test:
+      config: Release
       targets: [MacbookNanoTests, MacbookNanoUITests]
