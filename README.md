@@ -2,7 +2,7 @@
 
 An iPhone Duo app that turns the phone into a mini MacBook for a Mac on the network.
 Hold the unfolded Duo with the hinge horizontal: the Mac's screen is above the hinge,
-a Mac keyboard and trackpad are below it.
+a MacBook Pro keyboard and trackpad are below it.
 
 It is a VNC client for macOS's built-in Screen Sharing. Nothing to install on the Mac.
 
@@ -19,10 +19,14 @@ It is a VNC client for macOS's built-in Screen Sharing. Nothing to install on th
 | Trackpad | two fingers | scroll |
 | Trackpad | hold, then move | drag |
 | Screen | tap | click right there |
-| Screen | pinch | zoom (follows the pointer) |
-| Keyboard | tap SHIFT / CTRL / OPT / CMD | held for the next key (CMD, then C) |
-| Keyboard | hold a modifier | a real held key (hold CMD, tap TAB, TAB) |
-| Trackpad corner | × | disconnect |
+| Screen | pinch | zoom, around the fingers |
+| Screen | two fingers | pan the zoomed view |
+| Keyboard | tap shift / control / option / command | held for the next key (command, then C) |
+| Keyboard | hold a modifier | a real held key (hold command, tap tab, tab) |
+| Keyboard | fn + arrows / delete | home, end, page up, page down, forward delete |
+| Keyboard | hold the Touch ID key | disconnect |
+
+Zoomed in, the view follows the pointer when the trackpad moves it. The function row sends F1 to F12.
 
 Unfolded on its side (hinge vertical) the whole display is the Mac's screen.
 Away from home, put both devices on Tailscale and use the Mac's Tailscale name as the host.
