@@ -10,8 +10,8 @@ packages:
     revision: 090b96eddeee183e9fec293c5cd881d302a4349d
 settings:
   base:
-    MARKETING_VERSION: 0.1.2
-    CURRENT_PROJECT_VERSION: 3
+    MARKETING_VERSION: 0.2.0
+    CURRENT_PROJECT_VERSION: 4
     SWIFT_VERSION: 5.0
 targets:
   MacbookNano:

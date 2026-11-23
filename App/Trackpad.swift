@@ -48,8 +48,7 @@ struct Trackpad: UIViewRepresentable {
         @objc func move(_ g: UIPanGestureRecognizer) {
             let t = g.translation(in: g.view), v = g.velocity(in: g.view)
             g.setTranslation(.zero, in: g.view)
-            let zoom = UserDefaults.standard.object(forKey: "zoom") as? Double ?? 1
-            let k = pointerGain(speed: hypot(v.x, v.y), screenWidth: mac.size.width, zoom: zoom)
+            let k = pointerGain(speed: hypot(v.x, v.y), screenWidth: mac.size.width, zoom: mac.zoom)
             mac.move(by: CGSize(width: t.x * k, height: t.y * k))
         }
 

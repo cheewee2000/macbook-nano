@@ -8,6 +8,7 @@ LOG="$(mktemp -t fake_mac)"
 python3 test/fake_mac.py 5999 "$LOG" 'c0rrect horse!' &
 trap 'kill $!' EXIT
 xcodegen -q
+xcrun simctl bootstatus "$SIM" -b > /dev/null 2>&1 || true    # a cold simulator refuses the first launch
 xcodebuild test -project MacbookNano.xcodeproj -scheme MacbookNano -destination "platform=iOS Simulator,name=$SIM" -quiet \
   > "$LOG.xcodebuild" 2>&1 || { grep -E "error:|XCTAssert|\*\* TEST" "$LOG.xcodebuild"; exit 1; }
 # the simulator finds RoyalVNCKit in the build folder even when it is not in the app; the phone does not (v0.1.0 crashed on launch)

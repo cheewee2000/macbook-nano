@@ -45,7 +45,7 @@ struct Root: View {
     }
 }
 
-/// The mini MacBook: the Mac's screen above the hinge, keyboard and trackpad below it.
+/// The mini MacBook: the Mac's screen above the hinge, a MacBook Pro's deck (keyboard, trackpad) below it.
 /// The hinge is the middle of the whole window, so the split is measured with the safe areas included.
 struct Laptop: View {
     @ObservedObject var mac: Mac
@@ -57,50 +57,85 @@ struct Laptop: View {
             Group {
                 if w > h {
                     // on its side the hinge is vertical, no laptop to be had: all screen, touch it to click
-                    Screen(mac: mac).padding(.top, inset.top)
+                    Screen(mac: mac)
                 } else {
                     VStack(spacing: 0) {
-                        Screen(mac: mac).padding(.top, inset.top).frame(height: h / 2)
-                        Keyboard(mac: mac).frame(height: h / 2 * 0.6)
-                        Trackpad(mac: mac)
-                            .overlay(alignment: .topTrailing) {
-                                Button("×") { mac.disconnect() }
-                                    .font(mono(20)).frame(width: 44, height: 44)
-                                    .accessibilityLabel("Disconnect")
-                            }
+                        Screen(mac: mac).frame(height: h / 2)
+                        Deck(mac: mac, bottomInset: inset.bottom)
                     }
                 }
             }
             .frame(width: w, height: h)
+            .background(.black)                  // the lid's bezel, around a Mac screen that is not the lid's shape
             .ignoresSafeArea()
         }
         .ignoresSafeArea(.keyboard)              // the iOS keyboard sliding away after sign-in must not squeeze the laptop
+        .statusBarHidden()                       // no bar over the Mac's screen: the lid is all Mac, to the top edge
         .defersSystemGestures(on: .bottom)       // trackpad strokes near the bottom edge are not "go home"
         .persistentSystemOverlays(.hidden)
     }
 }
 
-/// Where the Mac's picture sits inside the screen area: aspect-fit × zoom, panned so the pointer stays in view.
-func viewport(container: CGSize, screen: CGSize, zoom: CGFloat, cursor: CGPoint) -> CGRect {
-    guard screen.width > 0, screen.height > 0 else { return .zero }
-    let scale = min(container.width / screen.width, container.height / screen.height) * zoom
-    func origin(_ content: CGFloat, _ box: CGFloat, _ c: CGFloat) -> CGFloat {
-        content <= box ? (box - content) / 2 : min(0, max(box - content, box / 2 - c * scale))
-    }
-    let size = CGSize(width: screen.width * scale, height: screen.height * scale)
-    return CGRect(origin: CGPoint(x: origin(size.width, container.width, cursor.x),
-                                  y: origin(size.height, container.height, cursor.y)), size: size)
-}
-
-/// The Mac's screen. Pinch to zoom (it follows the pointer), tap to click right there.
-struct Screen: View {
-    @ObservedObject var mac: Mac
-    @AppStorage("zoom") private var zoom = 1.0
-    @GestureState private var pinch = 1.0
+/// The lower half of a MacBook Pro: aluminium, the black keyboard well, the glass trackpad centred under it.
+struct Deck: View {
+    let mac: Mac
+    let bottomInset: CGFloat
 
     var body: some View {
         GeometryReader { g in
-            let r = viewport(container: g.size, screen: mac.size, zoom: min(max(zoom * pinch, 1), 8), cursor: mac.cursor)
+            let margin = g.size.width * 0.014, well = g.size.width * 0.006
+            let unit = (g.size.width - 2 * (margin + well)) / 14.5
+            let pad = RoundedRectangle(cornerRadius: unit * 0.22, style: .continuous)
+            VStack(spacing: 0) {
+                Keyboard(mac: mac, unit: unit)
+                    .padding(well)
+                    .background(Color(white: 0.04), in: RoundedRectangle(cornerRadius: unit * 0.2, style: .continuous))
+                    .padding([.horizontal, .top], margin)
+                Trackpad(mac: mac)
+                    .background(Color(white: 0.80), in: pad)
+                    .overlay(pad.strokeBorder(Color(white: 0.66), lineWidth: 1))
+                    .clipShape(pad)
+                    .frame(width: g.size.width * 0.46)   // a MacBook Pro's trackpad is a little under half the deck
+                    .padding(.top, margin)
+                    .padding(.bottom, max(margin, bottomInset))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color(white: 0.84))
+    }
+}
+
+/// Where the Mac's picture sits inside the screen area: aspect-fit × zoom, with Mac pixel `center` in the middle.
+func viewport(container: CGSize, screen: CGSize, zoom: CGFloat, center: CGPoint) -> CGRect {
+    guard screen.width > 0, screen.height > 0 else { return .zero }
+    let scale = min(container.width / screen.width, container.height / screen.height) * zoom
+    func origin(_ content: CGFloat, _ box: CGFloat, _ c: CGFloat) -> CGFloat {
+        content <= box ? (box - content) / 2 : box / 2 - c * scale
+    }
+    let size = CGSize(width: screen.width * scale, height: screen.height * scale)
+    return CGRect(origin: CGPoint(x: origin(size.width, container.width, center.x),
+                                  y: origin(size.height, container.height, center.y)), size: size)
+}
+
+/// A view centre that never shows past the Mac screen's edges. `visible` is the size of the view in Mac pixels.
+func clamped(center: CGPoint, screen: CGSize, visible: CGSize) -> CGPoint {
+    func axis(_ c: CGFloat, _ s: CGFloat, _ v: CGFloat) -> CGFloat { v >= s ? s / 2 : min(max(c, v / 2), s - v / 2) }
+    return CGPoint(x: axis(center.x, screen.width, visible.width), y: axis(center.y, screen.height, visible.height))
+}
+
+/// The view follows the pointer: it stays still while the pointer is in the middle 80% and is pushed along at the edges.
+func following(_ pointer: CGPoint, center: CGPoint, visible: CGSize) -> CGPoint {
+    func axis(_ p: CGFloat, _ c: CGFloat, _ v: CGFloat) -> CGFloat { min(max(c, p - v * 0.4), p + v * 0.4) }
+    return CGPoint(x: axis(pointer.x, center.x, visible.width), y: axis(pointer.y, center.y, visible.height))
+}
+
+/// The Mac's screen. Pinch to zoom, two fingers to pan, tap to click right there.
+struct Screen: View {
+    @ObservedObject var mac: Mac
+
+    var body: some View {
+        GeometryReader { g in
+            let r = viewport(container: g.size, screen: mac.size, zoom: mac.zoom, center: mac.center)
             let scale = mac.size.width > 0 ? r.width / mac.size.width : 1
             ZStack(alignment: .topLeading) {
                 LayerView(layer: mac.layer).frame(width: r.width, height: r.height)
@@ -112,15 +147,52 @@ struct Screen: View {
             .offset(x: r.minX, y: r.minY)
             .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
             .clipped()
-            .contentShape(Rectangle())
-            .gesture(SpatialTapGesture().onEnded { t in
-                mac.move(to: CGPoint(x: (t.location.x - r.minX) / scale, y: (t.location.y - r.minY) / scale))
-                mac.click(.left)
-            })
-            .gesture(MagnifyGesture()
-                .updating($pinch) { v, s, _ in s = v.magnification }
-                .onEnded { v in zoom = min(max(zoom * v.magnification, 1), 8) })
-            .accessibilityIdentifier("screen")
+            .overlay { ScreenTouch(mac: mac) }
+            .onChange(of: g.size, initial: true) { _, size in mac.viewSize = size }
+        }
+    }
+}
+
+/// Touches on the Mac's screen. UIKit, because SwiftUI has no two-finger pan.
+struct ScreenTouch: UIViewRepresentable {
+    let mac: Mac
+
+    func makeCoordinator() -> Touch { Touch(mac) }
+
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView(), c = context.coordinator
+        v.isMultipleTouchEnabled = true
+        v.accessibilityIdentifier = "screen"
+        let pan = UIPanGestureRecognizer(target: c, action: #selector(Touch.pan))
+        pan.minimumNumberOfTouches = 2
+        pan.maximumNumberOfTouches = 2
+        for g in [UITapGestureRecognizer(target: c, action: #selector(Touch.tap)),
+                  UIPinchGestureRecognizer(target: c, action: #selector(Touch.pinch)), pan] {
+            g.delegate = c
+            v.addGestureRecognizer(g)
+        }
+        return v
+    }
+
+    func updateUIView(_ v: UIView, context: Context) {}
+
+    final class Touch: NSObject, UIGestureRecognizerDelegate {
+        let mac: Mac
+        init(_ mac: Mac) { self.mac = mac }
+
+        // pinch and pan are one gesture to the hand: both at once
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith o: UIGestureRecognizer) -> Bool { true }
+
+        @objc func tap(_ g: UITapGestureRecognizer) { mac.click(at: g.location(in: g.view)) }
+
+        @objc func pinch(_ g: UIPinchGestureRecognizer) {
+            mac.pinch(by: g.scale, at: g.location(in: g.view))
+            g.scale = 1
+        }
+
+        @objc func pan(_ g: UIPanGestureRecognizer) {
+            mac.pan(by: g.translation(in: g.view))
+            g.setTranslation(.zero, in: g.view)
         }
     }
 }

@@ -45,9 +45,57 @@ final class Mac: NSObject, ObservableObject, VNCConnectionDelegate {
         status = .idle
     }
 
+    // MARK: View (which part of the Mac's screen is showing)
+
+    @Published private(set) var zoom: CGFloat = UserDefaults.standard.object(forKey: "zoom") as? Double ?? 1
+    @Published private(set) var center = CGPoint.zero          // the Mac pixel in the middle of the view
+    /// The screen area on the phone, in points. Set by the view that draws it.
+    var viewSize = CGSize.zero { didSet { if viewSize != oldValue { setView(zoom: zoom, center: center) } } }
+
+    private var fit: CGFloat {
+        size.width > 0 && viewSize.width > 0 ? min(viewSize.width / size.width, viewSize.height / size.height) : 1
+    }
+    private var visible: CGSize { CGSize(width: viewSize.width / (fit * zoom), height: viewSize.height / (fit * zoom)) }
+    var viewRect: CGRect { viewport(container: viewSize, screen: size, zoom: zoom, center: center) }
+
+    private func setView(zoom z: CGFloat, center c: CGPoint) {
+        zoom = min(max(z, 1), 8)
+        center = clamped(center: c, screen: size, visible: visible)
+        UserDefaults.standard.set(Double(zoom), forKey: "zoom")
+    }
+
+    /// Two fingers on the screen: the Mac pixel under them stays under them.
+    func pinch(by s: CGFloat, at p: CGPoint) {
+        let r = viewRect
+        guard r.width > 0 else { return }
+        let old = r.width / size.width
+        let anchor = CGPoint(x: (p.x - r.minX) / old, y: (p.y - r.minY) / old)
+        let z = min(max(zoom * s, 1), 8), new = fit * z
+        setView(zoom: z, center: CGPoint(x: anchor.x + (viewSize.width / 2 - p.x) / new,
+                                         y: anchor.y + (viewSize.height / 2 - p.y) / new))
+    }
+
+    func pan(by t: CGPoint) {
+        let k = fit * zoom
+        setView(zoom: zoom, center: CGPoint(x: center.x - t.x / k, y: center.y - t.y / k))
+    }
+
     // MARK: Input
 
-    func move(by d: CGSize) { move(to: CGPoint(x: cursor.x + d.width, y: cursor.y + d.height)) }
+    /// From the trackpad. Zoomed in, the view follows the pointer.
+    func move(by d: CGSize) {
+        move(to: CGPoint(x: cursor.x + d.width, y: cursor.y + d.height))
+        setView(zoom: zoom, center: following(cursor, center: center, visible: visible))
+    }
+
+    /// A tap on the screen itself: click the Mac pixel under the finger. The view stays put.
+    func click(at p: CGPoint) {
+        let r = viewRect
+        guard r.width > 0 else { return }
+        let k = r.width / size.width
+        move(to: CGPoint(x: (p.x - r.minX) / k, y: (p.y - r.minY) / k))
+        click(.left)
+    }
 
     func move(to p: CGPoint) {
         cursor = CGPoint(x: min(max(p.x, 0), max(size.width - 1, 0)), y: min(max(p.y, 0), max(size.height - 1, 0)))
@@ -108,6 +156,7 @@ final class Mac: NSObject, ObservableObject, VNCConnectionDelegate {
             self.size = s
             self.cursor = center ? CGPoint(x: s.width / 2, y: s.height / 2)
                                  : CGPoint(x: min(self.cursor.x, s.width - 1), y: min(self.cursor.y, s.height - 1))
+            self.setView(zoom: self.zoom, center: center ? self.cursor : self.center)
         }
     }
 
